@@ -3,8 +3,6 @@ name: BBC Downloader - Trigger via Issue
 on:
   issues:
     types: [ opened, edited ]
-
-  # 手动触发（可选）
   workflow_dispatch:
 
 jobs:
@@ -13,6 +11,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: write  # 添加关闭issue的权限
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,16 +26,13 @@ jobs:
         run: mvn clean package
 
       - name: Build Docker image
-        run: |
-          docker build -t bbc-downloader .
+        run: docker build -t bbc-downloader .
 
       - name: Run Docker container
-        run: |
-          docker run -d -p 8080:8080 --name BBCDownloader bbc-downloader
+        run: docker run -d -p 8080:8080 --name BBCDownloader bbc-downloader
 
       - name: Wait for server to start
-        run: |
-          sleep 10
+        run: sleep 10
 
       - name: Trigger download endpoint
         id: download
@@ -59,12 +55,13 @@ jobs:
       - name: Check if issue contains {"downloadBBC"}
         id: check_issue
         run: |
-          content=$(echo "$INPUT_ISSUE_BODY" | tr -d '\r' | tr -d '\n')
-           if [[ "$content" == *"{\"downloadBBC\"}"* ]]; then
-             echo "match=true" >> $GITHUB_ENV
-           else
-             echo "match=false" >> $GITHUB_ENV
-           fi
+          content="${{ github.event.issue.body }}"
+          clean_content=$(echo "$content" | tr -d '\r\n')
+          if [[ "$clean_content" == *"{\"downloadBBC\"}"* ]]; then
+            echo "match=true" >> $GITHUB_ENV
+          else
+            echo "match=false" >> $GITHUB_ENV
+          fi
 
       - name: Comment on Issue
         if: env.match == 'true'
@@ -76,12 +73,18 @@ jobs:
             **Download Response:**
             json ${{ env.response }}
             📁 You can download the podcasts from the attached artifact below.
+            [🔗 Download Artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)
 
-                        [🔗 Download Artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)
+      - name: Close the issue
+        if: env.match == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue close ${{ github.event.issue.number }} \
+            --comment "✅ This issue has been automatically closed after successful podcast download."
 
-                  - name: Close the issue
-                    if: env.match == 'true'
-                    run: |          
-
-                ISSUE_NUMBER=${{ github.event.issue.number }}
-                      gh issue close $ISSUE_NUMBER --comment "✅ This issue has been automatically closed after successful podcast download."
+      - name: Cleanup Docker container
+        if: always()
+        run: |
+          docker stop BBCDownloader || true
+          docker rm BBCDownloader || true
