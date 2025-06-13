@@ -3,6 +3,7 @@ package com.loucas.funnyUtils.controller;
 import com.loucas.funnyUtils.common.CommonResult;
 import com.loucas.funnyUtils.service.BBCService;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -15,7 +16,7 @@ public class BBCDownloaderController {
         this.bbcService = bbcService;
     }
 
-    @RequestMapping(value = "/download")
+    @RequestMapping(value = "/download", method = RequestMethod.GET)
     public CommonResult<Object> download() {
         try {
             bbcService.download();
