@@ -24,3 +24,6 @@ spring:
     password: your_password
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+app:
+  uuid:
+    max-count: 1000
