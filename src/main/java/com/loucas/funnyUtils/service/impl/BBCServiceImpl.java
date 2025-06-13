@@ -17,6 +17,10 @@ import java.util.Date;
 
 @Service
 public class BBCServiceImpl implements BBCService {
+
+    // BBC 官方 RSS 地址
+    private static final String RSS_URL = "https://feeds.bbci.co.uk/learningenglish/english/features/6-minute-english/rss";
+
     @Override
     public void download() throws IOException {
         String baseDir = new File(".").getCanonicalPath() + File.separator + "podcasts";
@@ -25,85 +29,73 @@ public class BBCServiceImpl implements BBCService {
             podcastsDir.mkdirs();
         }
 
-        String url = "http://www.bbc.co.uk/learningenglish/english/features/6-minute-english";
-        Document doc = Jsoup.connect(url)
-                .header("Accept", "text/html, application/xhtml+xml, image/jxr, */*")
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36")
-                .header("Accept-Encoding", "gzip, deflate")
-                .header("Accept-Language", "en-US,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3")
-                .header("Content-Type", "text/plain;charset=UTF-8")
-                .header("Host", "www.bbc.co.uk")
-                .header("Referer", url)
-                .get();
+        try {
+            System.setProperty("http.proxyHost", "http://127.0.0.1");
+            System.setProperty("http.proxyPort", "7890");
+            System.setProperty("https.proxyHost", "http://127.0.0.1");
+            System.setProperty("https.proxyPort", "7890");
 
-        Element content = doc.getElementById("bbcle-content");
-        if (content == null) {
-            System.out.println("Content not found!");
-            return;
-        }
-        Element widget = content.selectFirst("div.widget-container.widget-container-full");
-        Elements podcastLinks = widget.select("div.text");
+            // 使用 Jsoup 获取 RSS 数据
+            Document feed = Jsoup.connect(RSS_URL)
+                    .timeout(60 * 1000) // 设置 10 秒超时
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Encoding", "gzip, deflate")
+                    .header("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")
+                    .header("Host", "feeds.bbci.co.uk")
+                    .header("Referer", "https://www.google.com/")
+                    .get();
 
-        for (Element p : podcastLinks) {
-            Element a = p.selectFirst("h2 a");
-            String title = a.text();
-            String dateStr = p.selectFirst("div.details h3").text();
+            Elements items = feed.select("item");
 
-            // Extract date
-            String datePattern = "(\\d{2} \\w{3} \\d{4})";
-            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(datePattern).matcher(dateStr);
-            if (!matcher.find()) continue;
-            String dateRaw = matcher.group(1);
-            String date;
-            try {
-                Date d = new SimpleDateFormat("dd MMM yyyy").parse(dateRaw);
-                date = new SimpleDateFormat("yyyy-MM-dd").format(d);
-            } catch (ParseException e) {
-                continue;
-            }
+            for (Element item : items) {
+                Element titleEl = item.selectFirst("title");
+                Element linkEl = item.selectFirst("link");
+                Element pubDateEl = item.selectFirst("pubDate");
+                Element enclosureEl = item.selectFirst("enclosure");
 
-            String podPath = baseDir + File.separator + date + " " + title;
-            String pdfPath = podPath + File.separator + title + ".pdf";
-            String mp3Path = podPath + File.separator + title + ".mp3";
+                if (titleEl == null || linkEl == null || pubDateEl == null || enclosureEl == null) continue;
 
-            File podDir = new File(podPath);
-            File pdfFile = new File(pdfPath);
-            File mp3File = new File(mp3Path);
+                String title = titleEl.text();
+                String detailUrl = linkEl.text();
+                String pubDateStr = pubDateEl.text();
 
-            if (!podDir.exists() || !pdfFile.exists() || !mp3File.exists()) {
-                if (!podDir.exists()) podDir.mkdirs();
+                // 格式化日期
+                SimpleDateFormat inputFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z");
+                SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy-MM-dd");
+                Date pubDate = inputFormat.parse(pubDateStr);
+                String formattedDate = outputFormat.format(pubDate);
 
-                String detailUrl = "http://www.bbc.co.uk" + a.attr("href");
-                Document detailDoc = Jsoup.connect(detailUrl)
-                        .header("Accept", "text/html, application/xhtml+xml, image/jxr, */*")
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36")
-                        .header("Accept-Encoding", "gzip, deflate")
-                        .header("Accept-Language", "en-US,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3")
-                        .header("Content-Type", "text/plain;charset=UTF-8")
-                        .header("Host", "www.bbc.co.uk")
-                        .header("Referer", detailUrl)
-                        .get();
+                // 构建保存路径
+                String podPath = baseDir + File.separator + formattedDate + " " + title;
+                String mp3FileName = title + ".mp3";
+                String mp3Path = podPath + File.separator + mp3FileName;
 
-                Element rightContent = detailDoc.getElementById("bbcle-content")
-                        .selectFirst("div.widget-container.widget-container-right");
-                Element downloadWidget = rightContent.selectFirst("div.widget.widget-pagelink.widget-pagelink-download ");
-                Elements links = downloadWidget.select("a");
+                File podDir = new File(podPath);
+                File mp3File = new File(mp3Path);
 
-                String pdfUrl = links.get(0).attr("href");
-                String mp3Url = links.get(1).attr("href");
-
-                if (!pdfFile.exists()) {
-                    FileUtils.copyURLToFile(new URL(pdfUrl), pdfFile);
+                // 如果文件已存在则跳过
+                if (mp3File.exists()) {
+                    System.out.println("Skip..... " + title);
+                    continue;
                 }
-                if (!mp3File.exists()) {
-                    FileUtils.copyURLToFile(new URL(mp3Url), mp3File);
+
+                // 创建目录
+                if (!podDir.exists()) {
+                    podDir.mkdirs();
                 }
+
+                // 下载音频文件
+                String audioUrl = enclosureEl.attr("url");
+                FileUtils.copyURLToFile(new URL(audioUrl), mp3File);
 
                 System.out.println("Done ..... " + title);
-            } else {
-                System.out.println("Skip..... " + title);
             }
+
+            System.out.println("Done .... Downloaded");
+
+        } catch (IOException | ParseException e) {
+            throw new IOException("Failed to fetch or parse BBC RSS feed: " + e.getMessage(), e);
         }
-        System.out.println("Done .... Downloaded");
     }
 }
