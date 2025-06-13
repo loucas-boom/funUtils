@@ -2,7 +2,7 @@ name: BBC Downloader - Trigger via Issue
 
 on:
   issues:
-    types: [opened, edited]
+    types: [ opened, edited ]
 
   # 手动触发（可选）
   workflow_dispatch:
@@ -27,26 +27,26 @@ jobs:
         run: mvn clean package
 
       - name: Build Docker image
-        run: |          
+        run: |
           docker build -t bbc-downloader .
 
       - name: Run Docker container
-        run: |          
+        run: |
           docker run -d -p 8080:8080 --name BBCDownloader bbc-downloader
 
       - name: Wait for server to start
-        run: |          
+        run: |
           sleep 10
 
       - name: Trigger download endpoint
         id: download
-        run: |          
+        run: |
           response=$(curl -s http://localhost:8080/funny/download)
           echo "response=$response" >> $GITHUB_ENV
 
       - name: Save downloaded files
         if: always()
-        run: |          
+        run: |
           mkdir -p ./podcasts
           docker cp BBCDownloader:/app/podcasts/. ./podcasts/
 
@@ -58,20 +58,20 @@ jobs:
 
       - name: Check if issue contains {"downloadBBC"}
         id: check_issue
-        run: |          
-         content=$(echo "$INPUT_ISSUE_BODY" | tr -d '\r' | tr -d '\n')
-          if [[ "$content" == *"{\"downloadBBC\"}"* ]]; then
-            echo "match=true" >> $GITHUB_ENV
-          else
-            echo "match=false" >> $GITHUB_ENV
-          fi
+        run: |
+          content=$(echo "$INPUT_ISSUE_BODY" | tr -d '\r' | tr -d '\n')
+           if [[ "$content" == *"{\"downloadBBC\"}"* ]]; then
+             echo "match=true" >> $GITHUB_ENV
+           else
+             echo "match=false" >> $GITHUB_ENV
+           fi
 
       - name: Comment on Issue
         if: env.match == 'true'
         uses: peter-evans/create-or-update-comment@v2
         with:
           issue-number: ${{ github.event.issue.number }}
-          body: |            
+          body: |
             🎙️ BBC Podcast Download Completed!
             **Download Response:**
             json ${{ env.response }}
