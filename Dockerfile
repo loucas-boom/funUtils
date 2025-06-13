@@ -4,12 +4,19 @@ FROM maven:3.8.6-jdk-8 AS build
 # 设置工作目录
 WORKDIR /build
 
-# 复制 pom.xml 和所有源代码
+# 确保当前目录下有 pom.xml 和 src 目录
 COPY pom.xml .
 COPY src ./src
 
+# 构建前列出当前目录内容用于调试（可选）
+RUN ls -la
+
 # 执行 Maven 构建
 RUN mvn clean package
+
+# 构建后检查 target 是否生成
+RUN ls -l /build/target/
+
 
 # 第二阶段：运行应用
 FROM openjdk:8-jdk-alpine
