@@ -1,15 +1,18 @@
-name: BBC Downloader - Daily Task
+name: BBC Downloader - Trigger via Issue
 
 on:
-  # 每天早上 8 点触发（UTC 时间）
-  schedule:
-    - cron: 0 8 * * *
-  # 手动触发（可通过 GitHub UI 或 API 调用）
+  issues:
+    types: [opened, edited]
+
+  # 手动触发（可选）
   workflow_dispatch:
 
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,29 +27,61 @@ jobs:
         run: mvn clean package
 
       - name: Build Docker image
-        run: |
+        run: |          
           docker build -t bbc-downloader .
 
       - name: Run Docker container
-        run: |
+        run: |          
           docker run -d -p 8080:8080 --name BBCDownloader bbc-downloader
 
       - name: Wait for server to start
-        run: |
+        run: |          
           sleep 10
 
       - name: Trigger download endpoint
-        run: |
-          curl -s http://localhost:8080/funny/download
+        id: download
+        run: |          
+          response=$(curl -s http://localhost:8080/funny/download)
+          echo "response=$response" >> $GITHUB_ENV
 
       - name: Save downloaded files
         if: always()
-        run: |
+        run: |          
           mkdir -p ./podcasts
-          docker cp podcast:/app/podcasts/. ./podcasts/
+          docker cp BBCDownloader:/app/podcasts/. ./podcasts/
 
-      - name: Upload podcast files as artifact (optional)
+      - name: Upload podcast files as artifact
         uses: actions/upload-artifact@v3
         with:
           name: daily-podcasts
           path: ./podcasts/
+
+      - name: Check if issue contains {"downloadBBC"}
+        id: check_issue
+        run: |          
+         content=$(echo "$INPUT_ISSUE_BODY" | tr -d '\r' | tr -d '\n')
+          if [[ "$content" == *"{\"downloadBBC\"}"* ]]; then
+            echo "match=true" >> $GITHUB_ENV
+          else
+            echo "match=false" >> $GITHUB_ENV
+          fi
+
+      - name: Comment on Issue
+        if: env.match == 'true'
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |            
+            🎙️ BBC Podcast Download Completed!
+            **Download Response:**
+            json ${{ env.response }}
+            📁 You can download the podcasts from the attached artifact below.
+
+                        [🔗 Download Artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)
+
+                  - name: Close the issue
+                    if: env.match == 'true'
+                    run: |          
+
+                ISSUE_NUMBER=${{ github.event.issue.number }}
+                      gh issue close $ISSUE_NUMBER --comment "✅ This issue has been automatically closed after successful podcast download."
