@@ -27,10 +27,10 @@ WORKDIR /app
 # 创建播客文件保存目录
 RUN mkdir -p /app/podcasts
 
-RUN ls -l /app
+RUN ls -l /build/target/
 
 # 从构建阶段复制 JAR 文件
-COPY --from=build /app/target/FunnyUtilsApplication-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build /build/target/funnyUtils-0.0.1-SNAPSHOT.jar app.jar
 
 # 暴露端口
 EXPOSE 8080
