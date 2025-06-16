@@ -4,6 +4,7 @@ import com.loucas.funnyUtils.common.CommonResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -15,7 +16,7 @@ public class CommonController {
 
     @Value("${app.uuid.max-count}")
     private int maxUuidCount;
-    @RequestMapping("/getUUID/{num}")
+    @RequestMapping(value = "/getUUID/{num}", method = RequestMethod.GET)
     public CommonResult getUUID(@PathVariable int num) {
         // 参数校验
         if (num < 0) {
