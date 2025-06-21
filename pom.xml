@@ -108,7 +108,7 @@
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>com.loucas.funnyUtils.FunnyUtilsApplication</mainClass>
-                    <skip>true</skip>
+<!--                    <skip>true</skip>-->
                 </configuration>
                 <executions>
                     <execution>
