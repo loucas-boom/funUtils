@@ -1,11 +1,13 @@
 package com.loucas.funnyUtils.controller;
 
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import com.loucas.funnyUtils.common.CommonResult;
+import com.loucas.funnyUtils.common.Utils.FileScannerUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +15,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/common")
 public class CommonController {
+
+    private static final Logger logger = LoggerFactory.getLogger(CommonController.class);
 
     @Value("${app.uuid.max-count}")
     private int maxUuidCount;
@@ -33,4 +37,31 @@ public class CommonController {
         return CommonResult.success(list);
     }
 
+    @GetMapping("/video-files")
+    public CommonResult<List<FileScannerUtil.VideoFile>> listVideoFiles(
+            @RequestParam String path,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+
+        logger.info("收到请求 - 扫描视频文件，路径: {}, 分页: {}/{}", path, pageNum, pageSize);
+
+        try {
+            List<FileScannerUtil.VideoFile> allVideos = FileScannerUtil.scanForVideoFiles(path);
+
+            // 开启分页
+            PageHelper.startPage(pageNum, pageSize);
+            List<FileScannerUtil.VideoFile> pagedVideos = allVideos.subList(
+                    Math.min((pageNum - 1) * pageSize, allVideos.size()),
+                    Math.min(pageNum * pageSize, allVideos.size())
+            );
+
+            PageInfo<FileScannerUtil.VideoFile> pageInfo = new PageInfo<>(pagedVideos);
+            logger.info("成功返回第 {} 页，共 {} 条结果", pageNum, pagedVideos.size());
+
+            return CommonResult.success(pagedVideos);
+        } catch (Exception e) {
+            logger.error("扫描视频文件失败", e);
+            return CommonResult.failed("扫描失败: " + e.getMessage());
+        }
+    }
 }
